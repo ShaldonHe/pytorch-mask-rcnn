@@ -69,7 +69,7 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
 ############################################################
 
 def unique1d(tensor):
-    if tensor.size()[0] == 0 or tensor.size()[0] == 1:
+    if tensor.size(0) == 0 or tensor.size(0) == 1:
         return tensor
     tensor = tensor.sort()[0]
     unique_bool = tensor[1:] != tensor [:-1]
@@ -101,8 +101,8 @@ class SamePad2d(nn.Module):
         self.stride = torch.nn.modules.utils._pair(stride)
 
     def forward(self, input):
-        in_width = input.size()[2]
-        in_height = input.size()[3]
+        in_width = input.size(2)
+        in_height = input.size(3)
         out_width = math.ceil(float(in_width) / float(self.stride[0]))
         out_height = math.ceil(float(in_height) / float(self.stride[1]))
         pad_along_width = ((out_width - 1) * self.stride[0] +
@@ -359,7 +359,7 @@ def proposal_layer(inputs, proposal_count, nms_threshold, anchors, config=None):
 
     # Improve performance by trimming to top anchors by score
     # and doing the rest on the smaller subset.
-    pre_nms_limit = min(6000, anchors.size()[0])
+    pre_nms_limit = min(6000, anchors.size(0))
     scores, order = scores.sort(descending=True)
     order = order[:pre_nms_limit]
     scores = scores[:pre_nms_limit]
@@ -471,7 +471,7 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
         # Here we use the simplified approach of a single value per bin,
         # which is how it's done in tf.crop_and_resize()
         # Result: [batch * num_boxes, pool_height, pool_width, channels]
-        ind = Variable(torch.zeros(level_boxes.size()[0]),requires_grad=False).int()
+        ind = Variable(torch.zeros(level_boxes.size(0)),requires_grad=False).int()
         if level_boxes.is_cuda:
             ind = ind.cuda()
         feature_maps[i] = feature_maps[i].unsqueeze(0)  #CropAndResizeFunction needs batch dimension
@@ -503,8 +503,8 @@ def bbox_overlaps(boxes1, boxes2):
     # every boxes1 against every boxes2 without loops.
     # TF doesn't have an equivalent to np.repeate() so simulate it
     # using tf.tile() and tf.reshape.
-    boxes1_repeat = boxes2.size()[0]
-    boxes2_repeat = boxes1.size()[0]
+    boxes1_repeat = boxes2.size(0)
+    boxes2_repeat = boxes1.size(0)
     boxes1 = boxes1.repeat(1,boxes1_repeat).view(-1,4)
     boxes2 = boxes2.repeat(boxes2_repeat,1)
 
@@ -515,7 +515,7 @@ def bbox_overlaps(boxes1, boxes2):
     x1 = torch.max(b1_x1, b2_x1)[:, 0]
     y2 = torch.min(b1_y2, b2_y2)[:, 0]
     x2 = torch.min(b1_x2, b2_x2)[:, 0]
-    zeros = Variable(torch.zeros(y1.size()[0]), requires_grad=False)
+    zeros = Variable(torch.zeros(y1.size(0)), requires_grad=False)
     if y1.is_cuda:
         zeros = zeros.cuda()
     intersection = torch.max(x2 - x1, zeros) * torch.max(y2 - y1, zeros)
@@ -565,7 +565,10 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
     # Handle COCO crowds
     # A crowd box in COCO is a bounding box around several instances. Exclude
     # them from training. A crowd box is given a negative class ID.
-    if torch.nonzero(gt_class_ids < 0).size():
+    
+    if torch.nonzero(gt_class_ids < 0).size(0):
+        # print(torch.nonzero(gt_class_ids < 0).size(0))
+        # print(gt_class_ids)
         crowd_ix = torch.nonzero(gt_class_ids < 0)[:, 0]
         non_crowd_ix = torch.nonzero(gt_class_ids > 0)[:, 0]
         crowd_boxes = gt_boxes[crowd_ix.data, :]
@@ -579,7 +582,7 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
         crowd_iou_max = torch.max(crowd_overlaps, dim=1)[0]
         no_crowd_bool = crowd_iou_max < 0.001
     else:
-        no_crowd_bool =  Variable(torch.ByteTensor(proposals.size()[0]*[True]), requires_grad=False)
+        no_crowd_bool =  Variable(torch.ByteTensor(proposals.size(0)*[True]), requires_grad=False)
         if config.GPU_COUNT:
             no_crowd_bool = no_crowd_bool.cuda()
 
@@ -594,17 +597,17 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
 
     # Subsample ROIs. Aim for 33% positive
     # Positive ROIs
-    if torch.nonzero(positive_roi_bool).size():
+    if torch.nonzero(positive_roi_bool).size(0):
         positive_indices = torch.nonzero(positive_roi_bool)[:, 0]
 
         positive_count = int(config.TRAIN_ROIS_PER_IMAGE *
                              config.ROI_POSITIVE_RATIO)
-        rand_idx = torch.randperm(positive_indices.size()[0])
+        rand_idx = torch.randperm(positive_indices.size(0))
         rand_idx = rand_idx[:positive_count]
         if config.GPU_COUNT:
             rand_idx = rand_idx.cuda()
         positive_indices = positive_indices[rand_idx]
-        positive_count = positive_indices.size()[0]
+        positive_count = positive_indices.size(0)
         positive_rois = proposals[positive_indices.data,:]
 
         # Assign positive ROIs to GT boxes.
@@ -637,7 +640,7 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
             y2 = (y2 - gt_y1) / gt_h
             x2 = (x2 - gt_x1) / gt_w
             boxes = torch.cat([y1, x1, y2, x2], dim=1)
-        box_ids = Variable(torch.arange(roi_masks.size()[0]), requires_grad=False).int()
+        box_ids = Variable(torch.arange(roi_masks.size(0)), requires_grad=False).int()
         if config.GPU_COUNT:
             box_ids = box_ids.cuda()
         masks = Variable(CropAndResizeFunction(config.MASK_SHAPE[0], config.MASK_SHAPE[1], 0)(roi_masks.unsqueeze(1), boxes, box_ids).data, requires_grad=False)
@@ -653,16 +656,16 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
     negative_roi_bool = roi_iou_max < 0.5
     negative_roi_bool = negative_roi_bool & no_crowd_bool
     # Negative ROIs. Add enough to maintain positive:negative ratio.
-    if torch.nonzero(negative_roi_bool).size() and positive_count>0:
+    if torch.nonzero(negative_roi_bool).size(0) and positive_count>0:
         negative_indices = torch.nonzero(negative_roi_bool)[:, 0]
         r = 1.0 / config.ROI_POSITIVE_RATIO
         negative_count = int(r * positive_count - positive_count)
-        rand_idx = torch.randperm(negative_indices.size()[0])
+        rand_idx = torch.randperm(negative_indices.size(0))
         rand_idx = rand_idx[:negative_count]
         if config.GPU_COUNT:
             rand_idx = rand_idx.cuda()
         negative_indices = negative_indices[rand_idx]
-        negative_count = negative_indices.size()[0]
+        negative_count = negative_indices.size(0)
         negative_rois = proposals[negative_indices.data, :]
     else:
         negative_count = 0
@@ -749,7 +752,7 @@ def refine_detections(rois, probs, deltas, window, config):
 
     # Class probability of the top class of each ROI
     # Class-specific bounding box deltas
-    idx = torch.arange(class_ids.size()[0]).long()
+    idx = torch.arange(class_ids.size(0)).long()
     if config.GPU_COUNT:
         idx = idx.cuda()
     class_scores = probs[idx, class_ids.data]
@@ -884,7 +887,7 @@ class RPN(nn.Module):
         # Reshape to [batch, 2, anchors]
         rpn_class_logits = rpn_class_logits.permute(0,2,3,1)
         rpn_class_logits = rpn_class_logits.contiguous()
-        rpn_class_logits = rpn_class_logits.view(x.size()[0], -1, 2)
+        rpn_class_logits = rpn_class_logits.view(x.size(0), -1, 2)
 
         # Softmax on last dimension of BG/FG.
         rpn_probs = self.softmax(rpn_class_logits)
@@ -896,7 +899,7 @@ class RPN(nn.Module):
         # Reshape to [batch, 4, anchors]
         rpn_bbox = rpn_bbox.permute(0,2,3,1)
         rpn_bbox = rpn_bbox.contiguous()
-        rpn_bbox = rpn_bbox.view(x.size()[0], -1, 4)
+        rpn_bbox = rpn_bbox.view(x.size(0), -1, 4)
 
         return [rpn_class_logits, rpn_probs, rpn_bbox]
 
@@ -937,7 +940,7 @@ class Classifier(nn.Module):
         mrcnn_probs = self.softmax(mrcnn_class_logits)
 
         mrcnn_bbox = self.linear_bbox(x)
-        mrcnn_bbox = mrcnn_bbox.view(mrcnn_bbox.size()[0], -1, 4)
+        mrcnn_bbox = mrcnn_bbox.view(mrcnn_bbox.size(0), -1, 4)
 
         return [mrcnn_class_logits, mrcnn_probs, mrcnn_bbox]
 
@@ -1036,7 +1039,7 @@ def compute_rpn_bbox_loss(target_bbox, rpn_match, rpn_bbox):
     rpn_bbox = rpn_bbox[indices.data[:,0],indices.data[:,1]]
 
     # Trim target bounding box deltas to the same length as rpn_bbox.
-    target_bbox = target_bbox[0,:rpn_bbox.size()[0],:]
+    target_bbox = target_bbox[0,:rpn_bbox.size(0),:]
 
     # Smooth L1 loss
     loss = F.smooth_l1_loss(rpn_bbox, target_bbox)
@@ -1053,7 +1056,7 @@ def compute_mrcnn_class_loss(target_class_ids, pred_class_logits):
     """
 
     # Loss
-    if target_class_ids.size():
+    if target_class_ids.size(0):
         loss = F.cross_entropy(pred_class_logits,target_class_ids.long())
     else:
         loss = Variable(torch.FloatTensor([0]), requires_grad=False)
@@ -1071,7 +1074,7 @@ def compute_mrcnn_bbox_loss(target_bbox, target_class_ids, pred_bbox):
     pred_bbox: [batch, num_rois, num_classes, (dy, dx, log(dh), log(dw))]
     """
 
-    if target_class_ids.size():
+    if target_class_ids.size(0):
         # Only positive ROIs contribute to the loss. And only
         # the right class_id of each ROI. Get their indicies.
         positive_roi_ix = torch.nonzero(target_class_ids > 0)[:, 0]
@@ -1101,7 +1104,7 @@ def compute_mrcnn_mask_loss(target_masks, target_class_ids, pred_masks):
     pred_masks: [batch, proposals, height, width, num_classes] float32 tensor
                 with values from 0 to 1.
     """
-    if target_class_ids.size():
+    if target_class_ids.size(0):
         # Only positive ROIs contribute to the loss. And only
         # the class specific mask of each ROI.
         positive_ix = torch.nonzero(target_class_ids > 0)[:, 0]
@@ -1713,7 +1716,7 @@ class MaskRCNN(nn.Module):
             rois, target_class_ids, target_deltas, target_mask = \
                 detection_target_layer(rpn_rois, gt_class_ids, gt_boxes, gt_masks, self.config)
 
-            if not rois.size():
+            if not rois.size(0):
                 mrcnn_class_logits = Variable(torch.FloatTensor())
                 mrcnn_class = Variable(torch.IntTensor())
                 mrcnn_bbox = Variable(torch.FloatTensor())
@@ -1931,7 +1934,7 @@ class MaskRCNN(nn.Module):
             rpn_class_logits, rpn_pred_bbox, target_class_ids, mrcnn_class_logits, target_deltas, mrcnn_bbox, target_mask, mrcnn_mask = \
                 self.predict([images, image_metas, gt_class_ids, gt_boxes, gt_masks], mode='training')
 
-            if not target_class_ids.size():
+            if not target_class_ids.size(0):
                 continue
 
             # Compute losses
