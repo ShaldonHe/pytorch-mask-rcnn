@@ -2,7 +2,6 @@
 .vscode/
 logs/
 path/
-images/
 *.pth
 *.so
 *.pyc
